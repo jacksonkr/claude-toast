@@ -71,12 +71,14 @@ switch ($Event) {
     }
 }
 
-# Line 1 is the only line Windows renders at full contrast (bold title);
-# every later line is dimmed by the OS. Put the critical signal (action +
-# project) on line 1 so it's readable on any theme.
-$lines = @("$title  -  $project")
-if ($sessionName) { $lines += $sessionName }
-$lines += $body
+# Toast text color is 100% OS-themed -- the XML has no color attribute, so
+# nothing here can set it. Windows renders ONLY the first text element at
+# full contrast; later lines are dimmed by the OS by design. So pack all
+# identifying info (action + project + session) into the first line and
+# keep a single supporting line.
+$head = "$title  -  $project"
+if ($sessionName) { $head = "$head  -  $sessionName" }
+$lines = @($head, $body)
 
 Import-Module BurntToast -ErrorAction SilentlyContinue
 
