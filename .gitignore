@@ -1,0 +1,7 @@
+# Windows / editor cruft
+Thumbs.db
+desktop.ini
+*.bak
+*.log
+.vs/
+.idea/
