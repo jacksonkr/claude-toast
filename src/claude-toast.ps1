@@ -82,24 +82,13 @@ $lines = @($head, $body)
 
 Import-Module BurntToast -ErrorAction SilentlyContinue
 
-# A system Dismiss button (no custom activation, nothing fragile) keeps the
-# Reminder scenario valid and gives an explicit close action.
-$dismiss = New-BTButton -Dismiss -Content "Dismiss"
-
-# UniqueIdentifier = session id. Distinct sessions get distinct ids, so
-# their toasts STACK in the Action Center instead of replacing each other.
-# A new toast for the SAME session updates that session's single entry.
-# Scenario "Reminder" makes the toast persist on screen until the user
-# dismisses it (no auto-timeout).
-try {
-    $bt      = $lines | ForEach-Object { New-BTText -Text $_ }
-    $binding = New-BTBinding -Children $bt
-    $visual  = New-BTVisual -BindingGeneric $binding
-    $action  = New-BTAction -Buttons $dismiss
-    $content = New-BTContent -Visual $visual -Actions $action -Scenario Reminder
-    Submit-BTNotification -Content $content -UniqueIdentifier $sid
-}
-catch {
-    # Fallback if the builder pipeline is unavailable for any reason.
-    New-BurntToastNotification -Text $lines -UniqueIdentifier $sid
-}
+# Plain standard toast. NO "Reminder" scenario: that scenario keeps the
+# banner asserted on screen and replays its entrance animation, which on
+# Windows 11 causes a stuttering flash (text briefly themed correctly, then
+# settling back into the translucent surface). A standard toast animates
+# once, then rests in the Action Center until dismissed.
+#
+# UniqueIdentifier = session id, so distinct sessions STACK in the Action
+# Center instead of replacing each other; a new toast for the SAME session
+# updates that session's single entry.
+New-BurntToastNotification -Text $lines -UniqueIdentifier $sid
