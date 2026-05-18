@@ -92,9 +92,12 @@ BurntToast is left installed (other tools may use it).
 - **`Stop` fires every turn.** With the Stop hook enabled you get a
   persistent "finished" toast after every response per session. Install
   with `-Events Notification` if that's too noisy.
-- **Theme contrast.** Windows controls toast colors; this tool can't set
-  text color. Critical info is forced onto the high-contrast title line,
-  but secondary lines are dimmed by the OS by design.
+- **Readability / transparency.** Windows themes all toast text; a script
+  cannot set toast text color. If text looks washed out, the usual cause is
+  **Transparency effects** — the toast surface is translucent and bright
+  windows behind it collapse the contrast of the OS-dimmed text. Fix:
+  Settings → Personalization → Colors → **Transparency effects → Off** for a
+  solid surface and consistently readable text.
 
 ## License
 
