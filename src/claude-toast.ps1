@@ -56,29 +56,19 @@ function Get-SessionName($sid, $transcript) {
 
 $sessionName = Get-SessionName $sid $transcript
 
+# "what Claude is asking" comes from Claude Code's notification message
+# (e.g. "Claude needs your permission to run Bash"); the hook does not pass
+# the verbatim chat question.
 switch ($Event) {
-    "Notification" {
-        $title = "Claude needs you"
-        $body  = if ($data.message) { $data.message } else { "Waiting for input or permission" }
-    }
-    "Stop" {
-        $title = "Claude finished"
-        $body  = "Response complete"
-    }
-    default {
-        $title = "Claude Code"
-        $body  = $Event
-    }
+    "Notification" { $ask = if ($data.message) { $data.message } else { "Waiting for your input" } }
+    "Stop"         { $ask = "Finished responding" }
+    default        { $ask = $Event }
 }
 
-# Toast text color is 100% OS-themed -- the XML has no color attribute, so
-# nothing here can set it. Windows renders ONLY the first text element at
-# full contrast; later lines are dimmed by the OS by design. So pack all
-# identifying info (action + project + session) into the first line and
-# keep a single supporting line.
-$head = "$title  -  $project"
-if ($sessionName) { $head = "$head  -  $sessionName" }
-$lines = @($head, $body)
+# Format: [window name] - [what Claude is asking]. "Window name" is the
+# Claude session/topic title (falls back to the project folder).
+$window = if ($sessionName) { $sessionName } else { $project }
+$lines  = @("$window  -  $ask")
 
 Import-Module BurntToast -ErrorAction SilentlyContinue
 
