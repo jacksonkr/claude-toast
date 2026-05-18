@@ -1,7 +1,16 @@
-# Windows / editor cruft
-Thumbs.db
-desktop.ini
+# Backups & logs (settings.json.bak from install/uninstall, stray hook logs)
 *.bak
 *.log
+*.tmp
+
+# OS cruft
+Thumbs.db
+desktop.ini
+.DS_Store
+
+# Editor / IDE
 .vs/
+.vscode/
 .idea/
+*.user
+*.suo

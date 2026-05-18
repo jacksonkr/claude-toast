@@ -1,27 +1,31 @@
 # claude-toast
 
-Persistent, stacking Windows toast notifications for [Claude Code](https://claude.com/claude-code) sessions.
+Stacking Windows toast notifications for [Claude Code](https://claude.com/claude-code) sessions.
 
 When a Claude Code session needs your input or finishes a turn, you get a
-Windows toast that tells you **which project and which session** — and the
-toast stays put until you dismiss it. Multiple sessions stack instead of
-overwriting each other, so you can glance at the Action Center and see the
-state of every terminal.
+Windows toast naming **which session** and **what it's asking**. Each session
+gets its own toast in the Action Center, so concurrent sessions stack instead
+of overwriting each other — glance at the Action Center to see the state of
+every terminal.
 
 ## What it does
 
-- **Stacks per session.** Each session gets its own toast (keyed by session
-  id), so concurrent sessions pile up in the Action Center instead of
-  replacing one another. A new toast for the *same* session updates that
-  session's single entry.
-- **Persists.** Uses the Windows `Reminder` scenario — toasts do not
-  auto-dismiss; they stay until you close them (a `Dismiss` button is
-  included).
+- **One line: `[session] - [what Claude is asking]`.** The toast reads, e.g.,
+  `Fix the login bug  -  Claude needs your permission to run Bash`, or
+  `... - Finished responding` on a `Stop`. The "asking" text comes from
+  Claude Code's notification message (the hook does not receive the verbatim
+  chat question).
+- **Stacks per session.** Each toast is keyed by session id
+  (`-UniqueIdentifier`, i.e. matching Tag + Group), so concurrent sessions
+  pile up separately in the Action Center. A new toast for the *same* session
+  updates that session's single entry in place instead of adding a new one.
 - **Names the session.** Reads the human session title from Claude Code's
-  `sessions-index.json` (falls back to the first prompt / first message).
-- **Readable on any theme.** The critical line (`Claude needs you -
-  <project>`) is placed on the bold, full-contrast title line, since
-  Windows dims every line after the first.
+  `sessions-index.json` (`summary` → `firstPrompt` → first transcript user
+  message), falling back to the project folder name.
+- **Plain native toast.** No `Reminder` scenario and no buttons — that hack
+  replayed the entrance animation and caused a stuttering re-render on
+  Windows 11. Toasts land in the Action Center via the default Windows
+  behavior and stay there until you clear them.
 
 ## Navigation
 
@@ -90,8 +94,8 @@ BurntToast is left installed (other tools may use it).
   `claude` process runs on this Windows machine. For remote sessions, use
   Claude Code's built-in mobile push instead.
 - **`Stop` fires every turn.** With the Stop hook enabled you get a
-  persistent "finished" toast after every response per session. Install
-  with `-Events Notification` if that's too noisy.
+  "finished" toast after every response, per session. Install with
+  `-Events Notification` if that's too noisy.
 - **Readability / transparency.** Windows themes all toast text; a script
   cannot set toast text color. If text looks washed out, the usual cause is
   **Transparency effects** — the toast surface is translucent and bright
