@@ -12,10 +12,49 @@ $project = Split-Path $cwd -Leaf
 $sid = if ($data.session_id) { $data.session_id } else { "unknown" }
 $transcript = if ($data.transcript_path) { $data.transcript_path } elseif ($data.transcriptPath) { $data.transcriptPath } else { $null }
 
-# Resolve the human session name. Claude Code stores it as the "summary"
-# field in sessions-index.json (one per project). Fall back to the first
-# prompt, then the first user message in the transcript.
-function Get-SessionName($sid, $transcript) {
+# Resolve the label that goes before " - " in the toast. Priority:
+#   1. The MOST RECENT user-typed message in the live transcript. We want
+#      the toast to reflect what the session is currently about, not the
+#      first prompt frozen at session start.
+#   2. The sessions-index.json `summary` (Claude Code's auto-title) - used
+#      only when no transcript is available.
+#   3. `firstPrompt` from sessions-index.json - last resort before the
+#      project folder name.
+function Get-RecentPrompt($transcript) {
+    if (-not $transcript -or -not (Test-Path $transcript)) { return $null }
+
+    # Walk a set of transcript lines and remember the latest real user
+    # prompt. tool_result entries also have type=user but their content is
+    # an array of objects, so we filter by $c -is [string].
+    $scan = {
+        param($lines)
+        $latest = $null
+        foreach ($line in $lines) {
+            if ($line -notmatch '"type":"user"') { continue }
+            try { $obj = $line | ConvertFrom-Json -ErrorAction Stop } catch { continue }
+            if ($obj.isMeta -or $obj.isSidechain) { continue }
+            $c = $obj.message.content
+            if ($c -is [string] -and $c.Trim()) { $latest = $c }
+        }
+        return $latest
+    }
+
+    # Fast path: the latest user message is almost always within the last
+    # few hundred lines. Fall back to the whole file only if the tail has
+    # no user prompts (long tool-use streaks).
+    $hit = & $scan (Get-Content $transcript -Tail 500 -ErrorAction SilentlyContinue)
+    if (-not $hit) { $hit = & $scan (Get-Content $transcript -ErrorAction SilentlyContinue) }
+    if (-not $hit) { return $null }
+
+    $clean = $hit.Trim()
+    # Slash commands come through as <command-name>/foo</command-name> ... -
+    # extract just the command name so the toast reads "/compact" not raw XML.
+    if ($clean -match '<command-name>([^<]+)</command-name>') { $clean = $matches[1].Trim() }
+    $clean = ($clean -replace '\s+', ' ').Trim()
+    return $clean.Substring(0, [Math]::Min(60, $clean.Length))
+}
+
+function Get-IndexedTitle($sid, $transcript) {
     $tryIndex = {
         param($ip)
         if (-not (Test-Path $ip)) { return $null }
@@ -28,7 +67,6 @@ function Get-SessionName($sid, $transcript) {
         }
         return $null
     }
-
     if ($transcript) {
         $adjacent = Join-Path (Split-Path $transcript -Parent) 'sessions-index.json'
         $n = & $tryIndex $adjacent
@@ -39,22 +77,11 @@ function Get-SessionName($sid, $transcript) {
         $n = & $tryIndex $ip
         if ($n) { return $n }
     }
-    if ($transcript -and (Test-Path $transcript)) {
-        $line = Get-Content $transcript -ErrorAction SilentlyContinue |
-                Where-Object { $_ -match '"type":"user"' } | Select-Object -First 1
-        if ($line) {
-            try {
-                $c = ($line | ConvertFrom-Json).message.content
-                if ($c -is [string] -and $c) {
-                    return $c.Substring(0, [Math]::Min(60, $c.Length))
-                }
-            } catch {}
-        }
-    }
     return $null
 }
 
-$sessionName = Get-SessionName $sid $transcript
+$sessionName = Get-RecentPrompt $transcript
+if (-not $sessionName) { $sessionName = Get-IndexedTitle $sid $transcript }
 
 # "what Claude is asking" comes from Claude Code's notification message
 # (e.g. "Claude needs your permission to run Bash"); the hook does not pass
@@ -65,8 +92,9 @@ switch ($Event) {
     default        { $ask = $Event }
 }
 
-# Format: [window name] - [what Claude is asking]. "Window name" is the
-# Claude session/topic title (falls back to the project folder).
+# Format: [label] - [what Claude is asking]. "Label" is the most recent
+# user prompt in the session (truncated), with index/title and finally the
+# project folder as fallbacks.
 $window = if ($sessionName) { $sessionName } else { $project }
 $lines  = @("$window  -  $ask")
 
