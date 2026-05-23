@@ -12,20 +12,29 @@ $project = Split-Path $cwd -Leaf
 $sid = if ($data.session_id) { $data.session_id } else { "unknown" }
 $transcript = if ($data.transcript_path) { $data.transcript_path } elseif ($data.transcriptPath) { $data.transcriptPath } else { $null }
 
-# Resolve the label that goes before " - " in the toast. Priority:
-#   1. The MOST RECENT user-typed message in the live transcript. We want
-#      the toast to reflect what the session is currently about, not the
-#      first prompt frozen at session start.
-#   2. The sessions-index.json `summary` (Claude Code's auto-title) - used
-#      only when no transcript is available.
-#   3. `firstPrompt` from sessions-index.json - last resort before the
-#      project folder name.
-function Get-RecentPrompt($transcript) {
+# /rename target. Claude Code stores it as the `name` field in a per-process
+# file at ~/.claude/sessions/<pid>.json. The auto-generated summary in
+# sessions-index.json is DIFFERENT and lives elsewhere -- we deliberately do
+# not fall back to it here, because the user only wants a session-name line
+# when they explicitly set one.
+function Get-RenamedTitle($sid) {
+    $dir = Join-Path $env:USERPROFILE '.claude\sessions'
+    if (-not (Test-Path $dir)) { return $null }
+    foreach ($f in Get-ChildItem $dir -Filter '*.json' -ErrorAction SilentlyContinue) {
+        try { $o = Get-Content $f.FullName -Raw -ErrorAction Stop | ConvertFrom-Json } catch { continue }
+        if ($o.sessionId -eq $sid -and $o.name) { return ([string]$o.name).Trim() }
+    }
+    return $null
+}
+
+# Most recent user-typed message in the live transcript, cleaned but NOT
+# truncated -- the caller decides how to slice it (first-N-words for the
+# toast, etc.). tool_result rows have type=user but content is an array, so
+# we keep only string-typed content. Slash-command echoes get reduced to
+# just the command name so the toast does not show raw <command-name> XML.
+function Get-LastUserMessage($transcript) {
     if (-not $transcript -or -not (Test-Path $transcript)) { return $null }
 
-    # Walk a set of transcript lines and remember the latest real user
-    # prompt. tool_result entries also have type=user but their content is
-    # an array of objects, so we filter by $c -is [string].
     $scan = {
         param($lines)
         $latest = $null
@@ -40,48 +49,27 @@ function Get-RecentPrompt($transcript) {
     }
 
     # Fast path: the latest user message is almost always within the last
-    # few hundred lines. Fall back to the whole file only if the tail has
-    # no user prompts (long tool-use streaks).
+    # few hundred lines. Fall back to the whole file only if a long tool-use
+    # streak pushed the latest prompt out of the tail.
     $hit = & $scan (Get-Content $transcript -Tail 500 -ErrorAction SilentlyContinue)
     if (-not $hit) { $hit = & $scan (Get-Content $transcript -ErrorAction SilentlyContinue) }
     if (-not $hit) { return $null }
 
     $clean = $hit.Trim()
-    # Slash commands come through as <command-name>/foo</command-name> ... -
-    # extract just the command name so the toast reads "/compact" not raw XML.
     if ($clean -match '<command-name>([^<]+)</command-name>') { $clean = $matches[1].Trim() }
-    $clean = ($clean -replace '\s+', ' ').Trim()
-    return $clean.Substring(0, [Math]::Min(60, $clean.Length))
+    return ($clean -replace '\s+', ' ').Trim()
 }
 
-function Get-IndexedTitle($sid, $transcript) {
-    $tryIndex = {
-        param($ip)
-        if (-not (Test-Path $ip)) { return $null }
-        try { $idx = Get-Content $ip -Raw -ErrorAction Stop | ConvertFrom-Json } catch { return $null }
-        $e = $idx.entries | Where-Object { $_.sessionId -eq $sid } | Select-Object -First 1
-        if (-not $e) { return $null }
-        if ($e.summary) { return $e.summary }
-        if ($e.firstPrompt -and $e.firstPrompt -ne 'No prompt') {
-            return $e.firstPrompt.Substring(0, [Math]::Min(60, $e.firstPrompt.Length))
-        }
-        return $null
-    }
-    if ($transcript) {
-        $adjacent = Join-Path (Split-Path $transcript -Parent) 'sessions-index.json'
-        $n = & $tryIndex $adjacent
-        if ($n) { return $n }
-    }
-    $root = Join-Path $env:USERPROFILE ".claude\projects"
-    foreach ($ip in (Get-ChildItem $root -Recurse -Filter 'sessions-index.json' -ErrorAction SilentlyContinue).FullName) {
-        $n = & $tryIndex $ip
-        if ($n) { return $n }
-    }
-    return $null
+function Get-FirstWords($s, $n) {
+    if (-not $s) { return $null }
+    $w = @(($s -split '\s+') | Where-Object { $_ -ne '' })
+    if (-not $w.Count) { return $null }
+    return (($w | Select-Object -First $n) -join ' ')
 }
 
-$sessionName = Get-RecentPrompt $transcript
-if (-not $sessionName) { $sessionName = Get-IndexedTitle $sid $transcript }
+$titleLine = Get-RenamedTitle $sid                          # /rename target, may be $null
+$lastMsg   = Get-LastUserMessage $transcript                # may be $null
+$prompt5w  = Get-FirstWords $lastMsg 5                      # first 5 words of last user message
 
 # "what Claude is asking" comes from Claude Code's notification message
 # (e.g. "Claude needs your permission to run Bash"); the hook does not pass
@@ -92,11 +80,16 @@ switch ($Event) {
     default        { $ask = $Event }
 }
 
-# Format: [label] - [what Claude is asking]. "Label" is the most recent
-# user prompt in the session (truncated), with index/title and finally the
-# project folder as fallbacks.
-$window = if ($sessionName) { $sessionName } else { $project }
-$lines  = @("$window  -  $ask")
+# Toast layout (top to bottom):
+#   1. Renamed session title (only if /rename was used)
+#   2. First 5 words of the last user message
+#   3. Claude's current question / status ($ask)
+# Lines 1 and 2 are skipped when the inputs are absent. The toast always
+# ends with $ask so there is always at least one line.
+$textLines = @()
+if ($titleLine) { $textLines += $titleLine }
+if ($prompt5w)  { $textLines += $prompt5w  }
+$textLines += $ask
 
 Import-Module BurntToast -ErrorAction SilentlyContinue
 
@@ -122,8 +115,8 @@ Import-Module BurntToast -ErrorAction SilentlyContinue
 # content behind it collapses the contrast of the OS-dimmed secondary text.
 # Turn it off (Settings > Personalization > Colors > Transparency effects)
 # for a solid surface and consistently readable native text.
-$text    = New-BTText -Text $lines[0]
-$binding = New-BTBinding -Children $text
+$texts   = @($textLines | ForEach-Object { New-BTText -Text $_ })
+$binding = New-BTBinding -Children $texts
 $visual  = New-BTVisual -BindingGeneric $binding
 $content = New-BTContent -Visual $visual -ActivationType Protocol -Launch 'claude-toast-noop:'
 Submit-BTNotification -Content $content -UniqueIdentifier $sid
