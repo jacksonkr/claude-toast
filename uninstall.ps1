@@ -63,6 +63,13 @@ if (Test-Path $settingsPath) {
     Write-Host "  No settings.json found - nothing to unhook."
 }
 
+# Remove the click-to-dismiss protocol registration (always - it's ours).
+$protoRoot = 'HKCU:\Software\Classes\claude-toast-noop'
+if (Test-Path $protoRoot) {
+    Remove-Item $protoRoot -Recurse -Force
+    Write-Host "  Protocol removed: claude-toast-noop:"
+}
+
 if ($RemoveFiles -and (Test-Path $InstallDir)) {
     Remove-Item $InstallDir -Recurse -Force
     Write-Host "  Removed $InstallDir"

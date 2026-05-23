@@ -76,6 +76,24 @@ $scriptPath = Join-Path $InstallDir 'claude-toast.ps1'
 Copy-Item $src $scriptPath -Force
 Write-Host "  Script -> $scriptPath"
 
+# 3b. Register a windowless no-op URI scheme used by the toast for
+#     click-to-dismiss. The toast XML carries
+#       activationType="protocol" launch="claude-toast-noop:"
+#     so a body click is routed through the OS protocol handler instead of
+#     BurntToast/Toolkit's COM activator (which would otherwise spawn a fresh
+#     powershell.exe). The handler is wscript.exe running a one-line VBS that
+#     immediately quits -- truly invisible.
+$noopVbs = Join-Path $InstallDir 'noop.vbs'
+Set-Content -Path $noopVbs -Value 'WScript.Quit' -Encoding ASCII
+$protoRoot = 'HKCU:\Software\Classes\claude-toast-noop'
+New-Item -Path $protoRoot -Force | Out-Null
+Set-ItemProperty -Path $protoRoot -Name '(default)'    -Value 'URL:claude-toast no-op'
+Set-ItemProperty -Path $protoRoot -Name 'URL Protocol' -Value ''
+New-Item -Path "$protoRoot\shell\open\command" -Force | Out-Null
+Set-ItemProperty -Path "$protoRoot\shell\open\command" -Name '(default)' `
+    -Value ('"{0}" "{1}"' -f (Join-Path $env:SystemRoot 'System32\wscript.exe'), $noopVbs)
+Write-Host "  Protocol -> claude-toast-noop: (click-to-dismiss)"
+
 # 4. Merge hooks into ~/.claude/settings.json --------------------------------
 $settingsPath = Join-Path $env:USERPROFILE '.claude\settings.json'
 if (Test-Path $settingsPath) {

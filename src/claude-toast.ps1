@@ -106,9 +106,24 @@ Import-Module BurntToast -ErrorAction SilentlyContinue
 # replacing each other; a new toast for the SAME session updates that
 # session's single entry.
 #
+# Click-to-dismiss: ActivationType=Protocol routes the click through the OS
+# URI handler instead of BurntToast/Toolkit's registered COM activator (which
+# would launch a fresh powershell.exe to "handle" the click, since our hook
+# process is long-gone). The installer registers `claude-toast-noop:` to a
+# windowless wscript stub that exits immediately -- clicking the toast fires
+# that, sees nothing happen visibly, and Windows dismisses the toast.
+# Background activation was tried first and still triggered the Toolkit's
+# activator EXE.
+# Going through the lower-level New-BTContent / Submit-BTNotification
+# pipeline because New-BurntToastNotification does not expose activation.
+#
 # Readability note: toast text is themed entirely by Windows. With
 # "Transparency effects" ON, the toast surface is translucent and bright
 # content behind it collapses the contrast of the OS-dimmed secondary text.
 # Turn it off (Settings > Personalization > Colors > Transparency effects)
 # for a solid surface and consistently readable native text.
-New-BurntToastNotification -Text $lines -UniqueIdentifier $sid
+$text    = New-BTText -Text $lines[0]
+$binding = New-BTBinding -Children $text
+$visual  = New-BTVisual -BindingGeneric $binding
+$content = New-BTContent -Visual $visual -ActivationType Protocol -Launch 'claude-toast-noop:'
+Submit-BTNotification -Content $content -UniqueIdentifier $sid

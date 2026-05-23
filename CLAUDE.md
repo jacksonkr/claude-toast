@@ -41,6 +41,17 @@ verify which copy you are running.
   Win11; the image-hero approach was rejected; the click-to-focus button was
   abandoned (stealing focus to an arbitrary terminal on Windows is brittle).
   Do not reintroduce these without explicit user request.
+- **Click-to-dismiss is a `Protocol` activation, not `Background`.** The
+  toast XML is built with `activationType="protocol"
+  launch="claude-toast-noop:"`. The installer registers that URI to a
+  windowless `wscript.exe noop.vbs`. Do NOT switch to `Background` or
+  `Foreground` activation — both routes go through BurntToast/Toolkit's COM
+  activator and spawn a visible `powershell.exe` on click (verified
+  empirically). The "no-op via OS protocol handler" pattern is the only way
+  found to get true click-to-dismiss without a console flash on this stack.
+  `New-BurntToastNotification` does not expose activation type, so the
+  script intentionally uses the lower-level `New-BTContent` +
+  `Submit-BTNotification` pipeline.
 - **Toast text color is 100% OS-themed.** A script cannot set it. Washed-out
   text is caused by Windows **Transparency effects** (translucent surface),
   not by the script. The fix is a user setting, documented in the README —

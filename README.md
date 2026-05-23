@@ -62,7 +62,10 @@ The installer:
 1. Relaxes the **CurrentUser** execution policy to `RemoteSigned` if needed.
 2. Installs the NuGet provider + BurntToast for the current user.
 3. Copies `claude-toast.ps1` to `~/.claude/claude-toast/`.
-4. Merges `Notification` and `Stop` hooks into `~/.claude/settings.json`
+4. Registers a `claude-toast-noop:` URI (HKCU) that maps to a windowless
+   wscript stub — this is how the toast click-to-dismiss works without
+   spawning a console window (see Caveats).
+5. Merges `Notification` and `Stop` hooks into `~/.claude/settings.json`
    (idempotent; backs the file up to `settings.json.bak` first).
 
 Open a new Claude Code session (or run `/hooks` once) to load the hooks.
@@ -80,11 +83,12 @@ powershell -File .\install.ps1 -InstallDir 'D:\tools\claude-toast'
 ## Uninstall
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\uninstall.ps1            # remove hooks
+powershell -ExecutionPolicy Bypass -File .\uninstall.ps1            # remove hooks + noop protocol
 powershell -ExecutionPolicy Bypass -File .\uninstall.ps1 -RemoveFiles  # also delete the script
 ```
 
-BurntToast is left installed (other tools may use it).
+BurntToast is left installed (other tools may use it). The
+`claude-toast-noop:` URI registration is always removed.
 
 ## Caveats
 
@@ -96,6 +100,13 @@ BurntToast is left installed (other tools may use it).
 - **`Stop` fires every turn.** With the Stop hook enabled you get a
   "finished" toast after every response, per session. Install with
   `-Events Notification` if that's too noisy.
+- **Click-to-dismiss.** Clicking the toast body anywhere dismisses it. The
+  toast is built with `activationType="protocol" launch="claude-toast-noop:"`
+  and the installer registers that URI to a windowless `wscript.exe noop.vbs`
+  stub. This sidesteps BurntToast/Toolkit's COM activator, which would
+  otherwise spawn a fresh `powershell.exe` on every click (the hook process
+  that posted the toast is long gone by the time you click). `uninstall.ps1`
+  removes the URI registration.
 - **Readability / transparency.** Windows themes all toast text; a script
   cannot set toast text color. If text looks washed out, the usual cause is
   **Transparency effects** — the toast surface is translucent and bright
