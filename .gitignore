@@ -1,16 +1,10 @@
-# Backups & logs (settings.json.bak from install/uninstall, stray hook logs)
-*.bak
-*.log
-*.tmp
+# Built binaries
+/claude-toast
+/claude-toast.exe
+/claude-toast-tray.exe
+*.exe
+/dist/
 
 # OS cruft
-Thumbs.db
-desktop.ini
 .DS_Store
-
-# Editor / IDE
-.vs/
-.vscode/
-.idea/
-*.user
-*.suo
+Thumbs.db
