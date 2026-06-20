@@ -10,9 +10,9 @@ import (
 )
 
 const (
-	runKeyPath    = `Software\Microsoft\Windows\CurrentVersion\Run`
-	runValueName  = "ClaudeToast"
-	aumidKeyPath  = `Software\Classes\AppUserModelId\` + appID
+	runKeyPath   = `Software\Microsoft\Windows\CurrentVersion\Run`
+	runValueName = "ClaudeToast"
+	aumidKeyPath = `Software\Classes\AppUserModelId\` + appID
 )
 
 func enableAutostart() error {

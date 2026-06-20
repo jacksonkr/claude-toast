@@ -114,8 +114,8 @@ func TestApplyHooksNilSettings(t *testing.T) {
 
 func TestRemoveOurHooksIgnoresMalformed(t *testing.T) {
 	list := []any{
-		"not a map",                                       // item not a map
-		map[string]any{"hooks": []any{42}},                // inner hook not a map
+		"not a map",                        // item not a map
+		map[string]any{"hooks": []any{42}}, // inner hook not a map
 		map[string]any{"hooks": []any{map[string]any{"command": "claude-toast hook --event Stop"}}}, // ours
 		map[string]any{"hooks": []any{map[string]any{"command": "keepme"}}},                         // user
 	}
