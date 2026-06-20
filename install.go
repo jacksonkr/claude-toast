@@ -82,6 +82,25 @@ func writeHooks(exe string, add bool) error {
 		}
 	}
 
+	settings = applyHooks(settings, exe, add)
+
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return err
+	}
+	out, err := json.MarshalIndent(settings, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, append(out, '\n'), 0o644)
+}
+
+// applyHooks is the pure merge: given the parsed settings map, add or remove the
+// claude-toast Notification/Stop hook groups, preserving every other key and any
+// hooks the user added themselves. Returns the modified map.
+func applyHooks(settings map[string]any, exe string, add bool) map[string]any {
+	if settings == nil {
+		settings = map[string]any{}
+	}
 	hooks, _ := settings["hooks"].(map[string]any)
 	if hooks == nil {
 		hooks = map[string]any{}
@@ -113,15 +132,7 @@ func writeHooks(exe string, add bool) error {
 	} else {
 		settings["hooks"] = hooks
 	}
-
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return err
-	}
-	out, err := json.MarshalIndent(settings, "", "  ")
-	if err != nil {
-		return err
-	}
-	return os.WriteFile(path, append(out, '\n'), 0o644)
+	return settings
 }
 
 func toSlice(v any) []any {

@@ -50,40 +50,49 @@ func runHook(args []string) {
 // Lines 1 and 2 are skipped when absent; line 3 is always present. The window
 // title is the project (last path segment of cwd).
 func buildNotification(event string, p hookPayload) notification {
-	var lines []string
-	if t := renamedTitle(p.SessionID); t != "" {
-		lines = append(lines, t)
-	}
-	if msg := lastUserMessage(p.TranscriptPath); msg != "" {
-		lines = append(lines, firstWords(msg, 5))
-	}
-
-	var ask string
-	switch event {
-	case "Stop":
-		ask = "Finished responding"
-	case "Notification":
-		if p.Message != "" {
-			ask = p.Message
-		} else {
-			ask = "Waiting for your input"
-		}
-	default:
-		ask = event
-	}
-	lines = append(lines, ask)
-
-	title := "Claude Code"
-	if p.CWD != "" {
-		title = filepath.Base(p.CWD)
-	}
-
 	return notification{
 		AppName:  "Claude Toast",
-		Title:    title,
-		Lines:    lines,
+		Title:    titleFromCwd(p.CWD),
+		Lines:    toastLines(renamedTitle(p.SessionID), lastUserMessage(p.TranscriptPath), askText(event, p.Message)),
 		IconPath: iconFilePath(),
 	}
+}
+
+// titleFromCwd is the notification title: the project (last path segment), or a
+// fallback when cwd is unknown.
+func titleFromCwd(cwd string) string {
+	if cwd == "" {
+		return "Claude Code"
+	}
+	return filepath.Base(cwd)
+}
+
+// askText is the final, always-present line: what Claude is asking or its status.
+func askText(event, message string) string {
+	switch event {
+	case "Stop":
+		return "Finished responding"
+	case "Notification":
+		if message != "" {
+			return message
+		}
+		return "Waiting for your input"
+	default:
+		return event
+	}
+}
+
+// toastLines assembles the body lines top to bottom: the /rename title if set,
+// the first 5 words of the last user message if any, then ask (always present).
+func toastLines(renameTitle, lastMsg, ask string) []string {
+	var lines []string
+	if renameTitle != "" {
+		lines = append(lines, renameTitle)
+	}
+	if lastMsg != "" {
+		lines = append(lines, firstWords(lastMsg, 5))
+	}
+	return append(lines, ask)
 }
 
 var (

@@ -5,6 +5,9 @@
 *.exe
 /dist/
 
+# Test / coverage
+coverage.out
+
 # OS cruft
 .DS_Store
 Thumbs.db
