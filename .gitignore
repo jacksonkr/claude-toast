@@ -6,7 +6,8 @@
 /dist/
 
 # Test / coverage
-coverage.out
+coverage
+coverage.*
 
 # OS cruft
 .DS_Store
