@@ -3,6 +3,7 @@
 /claude-toast.exe
 /claude-toast-tray.exe
 *.exe
+*.exe~
 /dist/
 
 # Test / coverage

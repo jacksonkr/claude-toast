@@ -51,7 +51,7 @@ sample notification.
 
 ### From source
 
-Requires Go 1.23+.
+Requires Go 1.25+.
 
 ```sh
 git clone https://github.com/jacksonkr/claude-toast
@@ -77,8 +77,8 @@ claude-toast test         Fire a test notification
 claude-toast hook --event <Notification|Stop>   (called by Claude Code)
 ```
 
-The tray menu lets you **send a test toast**, **pause/resume** notifications,
-and **open the config folder**.
+The tray menu lets you **pause/resume** notifications and **open the config
+folder**.
 
 ## How it works
 
