@@ -60,4 +60,4 @@ all three. Releases are native per-OS builds attached on a `v*` tag
   preserve everything else. Keep them idempotent.
 - **Pause** is a flag file in the config dir; the hook early-exits if present.
 - Commit messages end with the `Co-Authored-By` trailer. Default branch is
-  `master`. Do not push unless asked.
+  `main`. Do not push unless asked.
