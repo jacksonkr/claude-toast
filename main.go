@@ -39,6 +39,8 @@ func main() {
 		runPair(args[1:])
 	case "status":
 		runStatus()
+	case "simulate-pretooluse":
+		runSimulatePreToolUse(args[1:])
 	case "-h", "--help", "help":
 		usage()
 	default:

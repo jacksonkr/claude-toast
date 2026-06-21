@@ -36,7 +36,8 @@ func trayExe() string {
 }
 
 func runInstall() error {
-	if err := writeHooks(selfExe(), true); err != nil {
+	cfg := ensureInitialized()
+	if err := writeHooks(cfg, true); err != nil {
 		return fmt.Errorf("registering Claude Code hooks: %w", err)
 	}
 	if err := enableAutostart(); err != nil {
@@ -49,8 +50,6 @@ func runInstall() error {
 		fmt.Fprintln(os.Stderr, "warning: could not start the tray now:", err)
 	}
 
-	cfg := ensureInitialized()
-
 	fmt.Println("claude-toast installed.")
 	fmt.Println("  hooks: ", filepath.Join(claudeDir(), "settings.json"))
 	fmt.Println("  tray:   autostarts at login (started now)")
@@ -61,7 +60,7 @@ func runInstall() error {
 }
 
 func runUninstall() error {
-	if err := writeHooks("", false); err != nil {
+	if err := writeHooks(config{}, false); err != nil {
 		return fmt.Errorf("removing hooks: %w", err)
 	}
 	if err := disableAutostart(); err != nil {
@@ -74,9 +73,29 @@ func runUninstall() error {
 	return nil
 }
 
-// writeHooks adds (or, when add is false, removes) the claude-toast Notification
-// and Stop hooks in ~/.claude/settings.json, preserving everything else.
-func writeHooks(exe string, add bool) error {
+// hookExe is the executable hooks should invoke: the console binary. On Windows
+// that is the sibling claude-toast.exe even when the caller is the GUI tray
+// (claude-toast-tray.exe), so a tray-initiated rewrite still points hooks at the
+// console build.
+func hookExe() string {
+	exe := selfExe()
+	if runtime.GOOS == "windows" {
+		cand := filepath.Join(filepath.Dir(exe), "claude-toast.exe")
+		if _, err := os.Stat(cand); err == nil {
+			return cand
+		}
+	}
+	return exe
+}
+
+// reconcileHooks rewrites the hook entries to match the current config (used
+// when the tray toggles remote-approve on/off).
+func reconcileHooks(cfg config) error { return writeHooks(cfg, true) }
+
+// writeHooks adds (or, when add is false, removes) the claude-toast hooks in
+// ~/.claude/settings.json, preserving everything else. Which events are wired is
+// driven by cfg (PreToolUse only when remote-approve is enabled).
+func writeHooks(cfg config, add bool) error {
 	path := filepath.Join(claudeDir(), "settings.json")
 
 	settings := map[string]any{}
@@ -86,7 +105,7 @@ func writeHooks(exe string, add bool) error {
 		}
 	}
 
-	settings = applyHooks(settings, exe, add)
+	settings = applyHooks(settings, hookExe(), cfg, add)
 
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
@@ -98,10 +117,13 @@ func writeHooks(exe string, add bool) error {
 	return os.WriteFile(path, append(out, '\n'), 0o644)
 }
 
-// applyHooks is the pure merge: given the parsed settings map, add or remove the
-// claude-toast Notification/Stop hook groups, preserving every other key and any
-// hooks the user added themselves. Returns the modified map.
-func applyHooks(settings map[string]any, exe string, add bool) map[string]any {
+// applyHooks is the pure merge: given the parsed settings map, add or remove our
+// hook groups, preserving every other key and any hooks the user added. We
+// always sweep all three events so a removed/disabled one is cleared; on add we
+// wire Notification/Stop always and PreToolUse only when cfg.RemoteApprove. The
+// PreToolUse group carries a matcher (regex over tool names) so only allowlisted
+// tools invoke our blocking decision hook.
+func applyHooks(settings map[string]any, exe string, cfg config, add bool) map[string]any {
 	if settings == nil {
 		settings = map[string]any{}
 	}
@@ -110,19 +132,27 @@ func applyHooks(settings map[string]any, exe string, add bool) map[string]any {
 		hooks = map[string]any{}
 	}
 
-	for _, event := range []string{"Notification", "Stop"} {
+	wanted := map[string]bool{"Notification": add, "Stop": add, "PreToolUse": add && cfg.RemoteApprove}
+
+	for _, event := range []string{"Notification", "Stop", "PreToolUse"} {
 		list := removeOurHooks(toSlice(hooks[event]))
-		if add {
+		if wanted[event] {
 			cmd := fmt.Sprintf("%s hook --event %s", quoteExe(exe), event)
-			list = append(list, map[string]any{
+			timeout := 15
+			group := map[string]any{
 				"hooks": []any{
 					map[string]any{
 						"type":    "command",
 						"command": cmd,
-						"timeout": 15,
+						"timeout": timeout,
 					},
 				},
-			})
+			}
+			if event == "PreToolUse" {
+				group["matcher"] = strings.Join(cfg.Allowlist, "|")
+				group["hooks"].([]any)[0].(map[string]any)["timeout"] = 20
+			}
+			list = append(list, group)
 		}
 		if len(list) == 0 {
 			delete(hooks, event)

@@ -165,8 +165,9 @@ func printSubscribeHint(cfg config) {
 	fmt.Println()
 	fmt.Println("On your phone: install the ntfy app, set the server to")
 	fmt.Println("    " + cfg.NtfyServer)
-	fmt.Println("and subscribe to topic:")
-	fmt.Println("    " + ks.broadcastTopic())
+	fmt.Println("and subscribe to these topics:")
+	fmt.Println("    " + ks.broadcastTopic() + "   (toasts)")
+	fmt.Println("    " + ks.approveReqTopic() + "   (Allow/Deny prompts, when remote approve is on)")
 }
 
 // runUID prints this device's UID (the linking secret). Putting that UID on

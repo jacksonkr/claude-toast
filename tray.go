@@ -19,15 +19,16 @@ func onTrayReady() {
 	systray.SetTitle("")
 	systray.SetTooltip("Claude Toast — notifications for Claude Code")
 
+	// Make sure this device has a UID/relay so it runs as a node out of the box.
+	cfg := ensureInitialized()
+
 	mPause := systray.AddMenuItemCheckbox("Pause notifications", "Mute Claude toasts", isPaused())
+	mRemote := systray.AddMenuItemCheckbox("Remote approve (allowlisted tools)", "Let a linked device approve/deny permission prompts", cfg.RemoteApprove)
 	systray.AddSeparator()
 	mPairing := systray.AddMenuItem("Show pairing code", "Open the cross-device pairing token")
 	mFolder := systray.AddMenuItem("Open config folder", "Open the claude-toast data folder")
 	systray.AddSeparator()
 	mQuit := systray.AddMenuItem("Quit", "Stop the tray until next login")
-
-	// Make sure this device has a UID/relay so it runs as a node out of the box.
-	ensureInitialized()
 
 	// Listen for broadcasts from the user's other devices and show them locally.
 	go broadcastListener(context.Background())
@@ -43,6 +44,14 @@ func onTrayReady() {
 				} else {
 					if setPaused(true) == nil {
 						mPause.Check()
+					}
+				}
+			case <-mRemote.ClickedCh:
+				if setRemoteApprove(!mRemote.Checked()) {
+					if mRemote.Checked() {
+						mRemote.Uncheck()
+					} else {
+						mRemote.Check()
 					}
 				}
 			case <-mPairing.ClickedCh:

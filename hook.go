@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -11,11 +12,13 @@ import (
 
 // hookPayload is the JSON Claude Code passes on stdin to a hook command.
 type hookPayload struct {
-	CWD            string `json:"cwd"`
-	SessionID      string `json:"session_id"`
-	TranscriptPath string `json:"transcript_path"`
-	Message        string `json:"message"`
-	HookEventName  string `json:"hook_event_name"`
+	CWD            string          `json:"cwd"`
+	SessionID      string          `json:"session_id"`
+	TranscriptPath string          `json:"transcript_path"`
+	Message        string          `json:"message"`
+	HookEventName  string          `json:"hook_event_name"`
+	ToolName       string          `json:"tool_name"`  // PreToolUse
+	ToolInput      json.RawMessage `json:"tool_input"` // PreToolUse
 }
 
 // runHook is invoked by Claude Code on the Notification and Stop events.
@@ -36,6 +39,15 @@ func runHook(args []string) {
 		_ = json.Unmarshal(data, &p)
 	}
 
+	// PreToolUse is a decision hook: it may ask a remote device whether to allow
+	// a tool, then prints the decision to stdout. It does not toast/broadcast.
+	if event == "PreToolUse" {
+		cfg, _ := loadConfig()
+		decision, reason := decidePreToolUse(cfg, p, liveApprover())
+		emitPreToolUse(decision, reason)
+		return
+	}
+
 	if isPaused() {
 		return
 	}
@@ -50,6 +62,20 @@ func runHook(args []string) {
 			publishBroadcast(cfg, event, n)
 		}
 	}
+}
+
+// emitPreToolUse prints the PreToolUse hook decision Claude Code reads from
+// stdout. "ask" lets Claude fall back to its normal permission prompt.
+func emitPreToolUse(decision, reason string) {
+	out := map[string]any{
+		"hookSpecificOutput": map[string]any{
+			"hookEventName":            "PreToolUse",
+			"permissionDecision":       decision,
+			"permissionDecisionReason": reason,
+		},
+	}
+	b, _ := json.Marshal(out)
+	fmt.Println(string(b))
 }
 
 // buildNotification renders the toast text (top to bottom):

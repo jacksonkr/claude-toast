@@ -78,7 +78,9 @@ func ntfyPublish(ctx context.Context, server string, req ntfyPublishReq) error {
 // It returns the error that ended the stream (nil on clean ctx cancel). Callers
 // that want to stay subscribed wrap this in a reconnect loop.
 func ntfySubscribe(ctx context.Context, server string, topics []string, onMessage func(ntfyMessage)) error {
-	url := fmt.Sprintf("%s/%s/json?since=now", strings.TrimRight(server, "/"), strings.Join(topics, ","))
+	// No "since": ntfy streams only messages published after we connect, which is
+	// exactly what we want (no replay of stale toasts / approvals).
+	url := fmt.Sprintf("%s/%s/json", strings.TrimRight(server, "/"), strings.Join(topics, ","))
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return err

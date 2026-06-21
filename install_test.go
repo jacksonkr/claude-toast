@@ -23,7 +23,7 @@ func groups(settings map[string]any, event string) []any {
 }
 
 func TestApplyHooksAddToEmpty(t *testing.T) {
-	out := applyHooks(map[string]any{}, "claude-toast", true)
+	out := applyHooks(map[string]any{}, "claude-toast", config{}, true)
 	for _, ev := range []string{"Notification", "Stop"} {
 		if g := groups(out, ev); len(g) != 1 {
 			t.Fatalf("%s: got %d groups, want 1", ev, len(g))
@@ -37,7 +37,7 @@ func TestApplyHooksAddToEmpty(t *testing.T) {
 
 func TestApplyHooksPreservesOtherKeys(t *testing.T) {
 	in := mustParse(t, `{"cleanupPeriodDays":3650,"enabledPlugins":{"x":true}}`)
-	out := applyHooks(in, "claude-toast", true)
+	out := applyHooks(in, "claude-toast", config{}, true)
 	if out["cleanupPeriodDays"] == nil {
 		t.Error("cleanupPeriodDays dropped")
 	}
@@ -47,8 +47,8 @@ func TestApplyHooksPreservesOtherKeys(t *testing.T) {
 }
 
 func TestApplyHooksIdempotent(t *testing.T) {
-	out := applyHooks(map[string]any{}, "claude-toast", true)
-	out = applyHooks(out, "claude-toast", true) // install twice
+	out := applyHooks(map[string]any{}, "claude-toast", config{}, true)
+	out = applyHooks(out, "claude-toast", config{}, true) // install twice
 	if g := groups(out, "Stop"); len(g) != 1 {
 		t.Fatalf("after double install: %d Stop groups, want 1", len(g))
 	}
@@ -56,7 +56,7 @@ func TestApplyHooksIdempotent(t *testing.T) {
 
 func TestApplyHooksPreservesUserHook(t *testing.T) {
 	in := mustParse(t, `{"hooks":{"Notification":[{"hooks":[{"type":"command","command":"echo hi"}]}]}}`)
-	out := applyHooks(in, "claude-toast", true)
+	out := applyHooks(in, "claude-toast", config{}, true)
 	if g := groups(out, "Notification"); len(g) != 2 {
 		t.Fatalf("got %d Notification groups, want 2 (user + ours)", len(g))
 	}
@@ -71,8 +71,8 @@ func TestApplyHooksPreservesUserHook(t *testing.T) {
 
 func TestApplyHooksRemove(t *testing.T) {
 	in := mustParse(t, `{"hooks":{"Stop":[{"hooks":[{"type":"command","command":"my-script"}]}]}}`)
-	in = applyHooks(in, "claude-toast", true)    // Stop: [user, ours]; Notification: [ours]
-	out := applyHooks(in, "claude-toast", false) // remove ours
+	in = applyHooks(in, "claude-toast", config{}, true)    // Stop: [user, ours]; Notification: [ours]
+	out := applyHooks(in, "claude-toast", config{}, false) // remove ours
 
 	if g := groups(out, "Stop"); len(g) != 1 {
 		t.Fatalf("Stop after remove: %d groups, want 1 (user)", len(g))
@@ -90,8 +90,8 @@ func TestApplyHooksRemove(t *testing.T) {
 }
 
 func TestApplyHooksRemoveEmptiesHooksKey(t *testing.T) {
-	out := applyHooks(map[string]any{}, "claude-toast", true)
-	out = applyHooks(out, "claude-toast", false)
+	out := applyHooks(map[string]any{}, "claude-toast", config{}, true)
+	out = applyHooks(out, "claude-toast", config{}, false)
 	if _, ok := out["hooks"]; ok {
 		t.Error("hooks key should be deleted when no hooks remain")
 	}
@@ -119,8 +119,39 @@ func TestQuoteExe(t *testing.T) {
 	}
 }
 
+func TestApplyHooksRemoteApprove(t *testing.T) {
+	cfg := config{RemoteApprove: true, Allowlist: []string{"Read", "Glob"}}
+
+	// Disabled: no PreToolUse.
+	off := applyHooks(map[string]any{}, "claude-toast", config{}, true)
+	if g := groups(off, "PreToolUse"); len(g) != 0 {
+		t.Fatalf("PreToolUse present while remote-approve off: %d", len(g))
+	}
+
+	// Enabled: one PreToolUse group with a matcher built from the allowlist.
+	on := applyHooks(map[string]any{}, "claude-toast", cfg, true)
+	g := groups(on, "PreToolUse")
+	if len(g) != 1 {
+		t.Fatalf("PreToolUse groups = %d, want 1", len(g))
+	}
+	grp := g[0].(map[string]any)
+	if grp["matcher"] != "Read|Glob" {
+		t.Errorf("matcher = %v, want Read|Glob", grp["matcher"])
+	}
+	blob := string(mustMarshal(t, on))
+	if !strings.Contains(blob, "hook --event PreToolUse") {
+		t.Error("PreToolUse command not written")
+	}
+
+	// Remove sweeps PreToolUse too even when cfg would add it.
+	out := applyHooks(on, "claude-toast", cfg, false)
+	if g := groups(out, "PreToolUse"); len(g) != 0 {
+		t.Errorf("PreToolUse not removed on uninstall: %d", len(g))
+	}
+}
+
 func TestApplyHooksNilSettings(t *testing.T) {
-	out := applyHooks(nil, "claude-toast", true)
+	out := applyHooks(nil, "claude-toast", config{}, true)
 	if g := groups(out, "Stop"); len(g) != 1 {
 		t.Fatalf("nil settings: %d Stop groups, want 1", len(g))
 	}
