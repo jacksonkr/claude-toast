@@ -171,7 +171,16 @@ func isOurHookGroup(item any) bool {
 	return false
 }
 
+// quoteExe renders the executable path for a hook command. Claude Code runs hook
+// commands through POSIX sh (Git Bash) on Windows, where backslashes are escape
+// characters and would mangle a native path (C:\...\claude-toast.exe becomes
+// C:...claude-toast.exe -> command not found). Forward slashes work in both sh
+// and Windows, so normalize them on Windows. Always quote so spaces are safe.
 func quoteExe(exe string) string {
+	if runtime.GOOS == "windows" {
+		exe = strings.ReplaceAll(exe, `\`, "/")
+		return `"` + exe + `"`
+	}
 	if strings.ContainsAny(exe, " \t") {
 		return `"` + exe + `"`
 	}

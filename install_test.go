@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -28,8 +29,8 @@ func TestApplyHooksAddToEmpty(t *testing.T) {
 			t.Fatalf("%s: got %d groups, want 1", ev, len(g))
 		}
 	}
-	blob, _ := json.Marshal(out)
-	if !strings.Contains(string(blob), "claude-toast hook --event Stop") {
+	blob := string(mustMarshal(t, out))
+	if !strings.Contains(blob, "claude-toast") || !strings.Contains(blob, "hook --event Stop") {
 		t.Error("Stop hook command not written")
 	}
 }
@@ -63,7 +64,7 @@ func TestApplyHooksPreservesUserHook(t *testing.T) {
 	if !strings.Contains(blob, "echo hi") {
 		t.Error("user hook 'echo hi' was removed")
 	}
-	if !strings.Contains(blob, "claude-toast hook --event Notification") {
+	if !strings.Contains(blob, "hook --event Notification") {
 		t.Error("our hook not added")
 	}
 }
@@ -97,10 +98,23 @@ func TestApplyHooksRemoveEmptiesHooksKey(t *testing.T) {
 }
 
 func TestQuoteExe(t *testing.T) {
-	if got := quoteExe(`C:\tools\claude-toast.exe`); got != `C:\tools\claude-toast.exe` {
+	if runtime.GOOS == "windows" {
+		// Claude Code runs hooks through POSIX sh, which eats backslashes; the
+		// path must be forward-slashed and quoted so it survives. A backslash in
+		// the result is the exact bug that made hooks silently fail.
+		got := quoteExe(`C:\tools\claude-toast.exe`)
+		if got != `"C:/tools/claude-toast.exe"` {
+			t.Errorf("windows path = %q, want forward-slashed and quoted", got)
+		}
+		if strings.Contains(got, `\`) {
+			t.Errorf("windows hook command must not contain a backslash, got %q", got)
+		}
+		return
+	}
+	if got := quoteExe(`/usr/local/bin/claude-toast`); got != `/usr/local/bin/claude-toast` {
 		t.Errorf("no-space path should be unquoted, got %q", got)
 	}
-	if got := quoteExe(`C:\Program Files\ct.exe`); got != `"C:\Program Files\ct.exe"` {
+	if got := quoteExe(`/opt/My Apps/ct`); got != `"/opt/My Apps/ct"` {
 		t.Errorf("spaced path = %q, want quoted", got)
 	}
 }
