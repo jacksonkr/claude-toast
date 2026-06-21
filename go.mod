@@ -5,6 +5,7 @@ go 1.25.0
 require (
 	fyne.io/systray v1.12.2
 	github.com/go-toast/toast v0.0.0-20190211030409-01e6764cf0a4
+	golang.org/x/crypto v0.53.0
 	golang.org/x/sys v0.46.0
 )
 

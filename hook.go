@@ -39,7 +39,17 @@ func runHook(args []string) {
 	if isPaused() {
 		return
 	}
-	_ = showNotification(buildNotification(event, p))
+
+	n := buildNotification(event, p)
+	_ = showNotification(n)
+
+	// Mirror the alert to the user's other devices, if cross-device broadcast is
+	// configured. Best-effort and time-capped: it must never delay Claude.
+	if event == "Notification" || event == "Stop" {
+		if cfg, err := loadConfig(); err == nil && cfg.Broadcast && cfg.paired() {
+			publishBroadcast(cfg, event, n)
+		}
+	}
 }
 
 // buildNotification renders the toast text (top to bottom):

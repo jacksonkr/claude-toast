@@ -31,6 +31,14 @@ func main() {
 		mustRun(runInstall())
 	case "uninstall":
 		mustRun(runUninstall())
+	case "uid":
+		runUID()
+	case "link":
+		runLink(args[1:])
+	case "pair":
+		runPair(args[1:])
+	case "status":
+		runStatus()
 	case "-h", "--help", "help":
 		usage()
 	default:
@@ -68,6 +76,11 @@ Usage:
   claude-toast uninstall    Remove the hooks, autostart, and branding
   claude-toast tray         Run the system-tray daemon (started automatically)
   claude-toast test         Fire a test notification
+  claude-toast uid          Show this device's UID (for linking other devices)
+  claude-toast link <uid>   Link this device to another device's UID
+  claude-toast status       Show cross-device settings
   claude-toast hook --event <Notification|Stop>
-                            Invoked by Claude Code; reads its JSON from stdin`)
+                            Invoked by Claude Code; reads its JSON from stdin
+
+  Advanced: claude-toast pair [--server <url>] for a self-hosted relay.`)
 }

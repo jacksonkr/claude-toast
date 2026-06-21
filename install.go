@@ -49,10 +49,14 @@ func runInstall() error {
 		fmt.Fprintln(os.Stderr, "warning: could not start the tray now:", err)
 	}
 
+	cfg := ensureInitialized()
+
 	fmt.Println("claude-toast installed.")
 	fmt.Println("  hooks: ", filepath.Join(claudeDir(), "settings.json"))
 	fmt.Println("  tray:   autostarts at login (started now)")
+	fmt.Println("  UID:   ", cfg.Secret)
 	fmt.Println("Run `claude-toast test` to fire a sample notification.")
+	fmt.Println("Link another device with `claude-toast link " + cfg.Secret + "`.")
 	return nil
 }
 
