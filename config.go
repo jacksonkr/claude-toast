@@ -45,7 +45,7 @@ func defaultConfig() config {
 		NtfyServer:        defaultServer,
 		Broadcast:         true,
 		Allowlist:         []string{"Read", "Glob", "Grep", "LS"},
-		ApproveTimeoutSec: 12,
+		ApproveTimeoutSec: 18, // generous enough for phone push latency + a tap
 		SummaryCleartext:  true,
 		UnreachablePolicy: "deny",
 	}

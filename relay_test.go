@@ -89,7 +89,7 @@ func TestConfigDefaultsMergedOverPartialFile(t *testing.T) {
 	if len(c.Allowlist) != 4 {
 		t.Errorf("default allowlist lost: %v", c.Allowlist)
 	}
-	if c.ApproveTimeoutSec != 12 || !c.SummaryCleartext || c.UnreachablePolicy != "deny" {
+	if c.ApproveTimeoutSec != 18 || !c.SummaryCleartext || c.UnreachablePolicy != "deny" {
 		t.Error("scalar defaults not inherited")
 	}
 }

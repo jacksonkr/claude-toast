@@ -172,6 +172,42 @@ func setRemoteApprove(enabled bool) bool {
 	return reconcileHooks(cfg) == nil
 }
 
+// runRemote toggles remote-approve from the CLI (parity with the tray
+// checkbox): it persists the setting and rewires the PreToolUse hook.
+func runRemote(args []string) {
+	if len(args) == 0 {
+		fmt.Fprintln(os.Stderr, "usage: claude-toast remote <on|off>")
+		os.Exit(2)
+	}
+	var on bool
+	switch strings.ToLower(args[0]) {
+	case "on", "enable", "true":
+		on = true
+	case "off", "disable", "false":
+		on = false
+	default:
+		fmt.Fprintln(os.Stderr, "usage: claude-toast remote <on|off>")
+		os.Exit(2)
+	}
+	if !setRemoteApprove(on) {
+		fmt.Fprintln(os.Stderr, "failed to update remote approve")
+		os.Exit(1)
+	}
+	if !on {
+		fmt.Println("Remote approve: OFF")
+		return
+	}
+	cfg, _ := loadConfig()
+	fmt.Println("Remote approve: ON")
+	fmt.Println("  allowed tools: " + strings.Join(cfg.Allowlist, ", "))
+	if ks, ok := keysetFor(cfg); ok {
+		fmt.Println("  phone: also subscribe to the approval topic:")
+		fmt.Println("    " + ks.approveReqTopic())
+	}
+	fmt.Println("  note: Claude will ask your phone before these tools and block up to")
+	fmt.Printf("        %ds (deny on no answer). Turn off with `claude-toast remote off`.\n", cfg.ApproveTimeoutSec)
+}
+
 // runSimulatePreToolUse exercises the full publish->wait->decide path from the
 // CLI (no Claude needed), printing the decision JSON and elapsed time.
 func runSimulatePreToolUse(args []string) {

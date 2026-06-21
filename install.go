@@ -150,7 +150,9 @@ func applyHooks(settings map[string]any, exe string, cfg config, add bool) map[s
 			}
 			if event == "PreToolUse" {
 				group["matcher"] = strings.Join(cfg.Allowlist, "|")
-				group["hooks"].([]any)[0].(map[string]any)["timeout"] = 20
+				// Must exceed ApproveTimeoutSec so the hook returns its decision
+				// before Claude Code kills it.
+				group["hooks"].([]any)[0].(map[string]any)["timeout"] = 25
 			}
 			list = append(list, group)
 		}

@@ -39,6 +39,8 @@ func main() {
 		runPair(args[1:])
 	case "status":
 		runStatus()
+	case "remote":
+		runRemote(args[1:])
 	case "simulate-pretooluse":
 		runSimulatePreToolUse(args[1:])
 	case "-h", "--help", "help":
@@ -81,6 +83,7 @@ Usage:
   claude-toast uid          Show this device's UID (for linking other devices)
   claude-toast link <uid>   Link this device to another device's UID
   claude-toast status       Show cross-device settings
+  claude-toast remote <on|off>   Enable/disable remote approve of permission prompts
   claude-toast hook --event <Notification|Stop>
                             Invoked by Claude Code; reads its JSON from stdin
 
