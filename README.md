@@ -4,6 +4,9 @@ Native desktop notifications for [Claude Code](https://claude.com/claude-code) �
 get a toast (with sound) the instant Claude finishes a turn or needs your input,
 plus a system-tray icon to control it. **Windows, macOS, and Linux.**
 
+Optionally, [mirror toasts to your phone and other computers](#cross-device-phone--other-computers-optional)
+and **approve permission prompts remotely** so a run keeps going while you're away.
+
 ## Who this is for
 
 Power users who keep Claude Code running while they work **across multiple
@@ -74,11 +77,15 @@ claude-toast install      Register the Claude Code hooks + tray autostart
 claude-toast uninstall    Remove the hooks, autostart, and branding
 claude-toast tray         Run the system-tray daemon (started automatically)
 claude-toast test         Fire a test notification
+claude-toast uid          Show this device's UID (to link other devices)
+claude-toast link <uid>   Link this device to another device's UID
+claude-toast status       Show cross-device settings
+claude-toast remote <on|off>   Enable/disable remote approve of permission prompts
 claude-toast hook --event <Notification|Stop>   (called by Claude Code)
 ```
 
-The tray menu lets you **pause/resume** notifications and **open the config
-folder**.
+The tray menu lets you **pause/resume** notifications, toggle **remote approve**,
+**show the pairing code**, and **open the config folder**.
 
 ## How it works
 
@@ -103,6 +110,56 @@ Hooks run wherever `claude` runs. If you SSH into another machine and start
 Claude there, the toast fires on the remote box. Claude Toast covers sessions
 whose `claude` process runs on *your* desktop — which is exactly the
 multi-monitor / multi-desktop case it's built for.
+
+## Cross-device: phone + other computers (optional)
+
+Claude Toast can also mirror toasts to your **other computers and your phone**,
+and even let you **approve/deny permission prompts remotely** so a run keeps
+going while you're away from that machine.
+
+It works through [ntfy](https://ntfy.sh): your devices link into one group by a
+shared **UID**, and each device only ever makes **outbound** connections to the
+ntfy relay — *no machine opens a listening port*. The default relay is the public
+`ntfy.sh` (zero setup; topic names are unguessable). You can self-host with
+`claude-toast pair --server https://your-ntfy`.
+
+### Link your devices
+
+```sh
+claude-toast uid                 # on the first computer: prints its UID
+claude-toast link <uid>          # on every other computer: join that UID
+```
+
+On your **phone**, install the [ntfy app](https://ntfy.sh), point it at the same
+server (`https://ntfy.sh`), and subscribe to the topics printed by
+`claude-toast status`:
+
+- `…-bc` — toasts (the viewer feed)
+- `…-aq` — Allow/Deny prompts (only needed for remote approve)
+
+Phones are **viewers**: they receive toasts (and can tap Allow/Deny), but never
+run Claude.
+
+### Remote approve / deny
+
+```sh
+claude-toast remote on           # enable;  remote off to disable
+```
+
+When on, an allowlisted tool triggers an **Allow / Deny** notification on your
+linked devices; tap it and Claude continues. Safety model:
+
+- **Deny-only + allowlist** — only tools on the allowlist (default
+  `Read, Glob, Grep, LS`) are ever sent for remote approval. Anything else falls
+  back to Claude's normal local prompt and can **never** be remote-approved.
+- **No answer ⇒ deny** — if nobody taps before the timeout, the tool is denied.
+- **End-to-end** — approval messages are encrypted and bound to a one-time nonce,
+  so the relay can't read or forge a decision, and a tap can't be replayed.
+
+> **Practical tip:** remote approve makes Claude **wait** for your tap (and deny
+> on silence) before every allowlisted tool — phone push latency alone is often
+> 10+ seconds. Treat it as a **"stepping away" switch**: `remote on` when you
+> leave, `remote off` (the default) when you're back at the keyboard.
 
 ## Uninstall
 

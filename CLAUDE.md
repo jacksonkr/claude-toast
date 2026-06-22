@@ -9,7 +9,9 @@ a system-tray daemon for Claude Code, fired from its `Notification` and `Stop`
 hooks. Target user: someone running Claude Code across multiple monitors and
 multiple virtual desktops who would otherwise miss a session that needs them.
 
-It is an **alert layer only**. Jumping between sessions is done with
+Primarily an **alert layer**. It also has an optional **cross-device** layer
+(broadcast toasts to your other computers + phone, and remote approve/deny of
+permission prompts) — see below. Jumping between sessions is still done with
 `claude agents` (Agent View), not by this tool.
 
 ## Stack & layout
@@ -19,15 +21,21 @@ the module path is cosmetic (only in `go.mod`).
 
 | File(s)                       | Role                                                       |
 |-------------------------------|------------------------------------------------------------|
-| `main.go`                     | CLI dispatch: `install`/`uninstall`/`tray`/`test`/`hook`   |
-| `hook.go`                     | Parse Claude Code's stdin JSON, build the toast text       |
+| `main.go`                     | CLI dispatch: `install`/`uninstall`/`tray`/`test`/`hook`/`uid`/`link`/`status`/`remote` |
+| `hook.go`                     | Parse Claude Code's stdin JSON, build the toast text; PreToolUse decision branch |
 | `notify.go`                   | `notification` struct (the cross-OS payload)               |
 | `notify_{windows,darwin,linux}.go` | `showNotification` per OS (go-toast / osascript / notify-send) |
-| `tray.go`                     | `fyne.io/systray` daemon + menu                            |
-| `install.go`                  | settings.json hook wiring (idempotent)                     |
+| `tray.go`                     | `fyne.io/systray` daemon + menu; broadcast listener        |
+| `install.go`                  | settings.json hook wiring (idempotent); conditional PreToolUse hook |
 | `autostart_{windows,darwin,linux}.go` | autostart + (Windows) AUMID branding              |
 | `icon_{windows,other}.go`     | `//go:embed` the tray/notify icons                         |
 | `paths.go`                    | config dir, pause flag, icon extraction                    |
+| `config.go`                   | cross-device config (`config.json`, mode 0600) + load/save |
+| `crypto.go`                   | HKDF topic/key derivation + NaCl secretbox envelopes       |
+| `transport_ntfy.go`           | ntfy publish/subscribe (stdlib net/http only)              |
+| `broadcast.go`                | publish/receive broadcast toasts; echo suppression         |
+| `approve.go`                  | `decidePreToolUse` remote approve engine; `remote`/`simulate-pretooluse` |
+| `pair.go`                     | `uid`/`link`/`pair`/`status` + auto-init of UID/relay      |
 | `tools/gen-icon.ps1`          | Dev-time icon generator → committed `assets/toast.{ico,png}` |
 
 ## Build & test (Windows)
@@ -61,3 +69,31 @@ all three. Releases are native per-OS builds attached on a `v*` tag
 - **Pause** is a flag file in the config dir; the hook early-exits if present.
 - Commit messages end with the `Co-Authored-By` trailer. Default branch is
   `main`. Do not push unless asked.
+
+## Cross-device (do not re-break)
+
+- **Outbound-only, never a server.** Devices only *dial out* to an ntfy relay
+  (publish + subscribe); no machine opens a listening port. This is a deliberate
+  security choice (an inbound service on a box that runs Claude = RCE surface).
+  Don't add a listener/P2P server.
+- **Linked by UID.** One pairing secret (the "UID", base64url of 32 bytes) is
+  copied across devices. HKDF derives the AEAD key **and** the three topic names
+  (`-bc` broadcast, `-aq` approve-request, `-ar` approve-response) from it, so the
+  relay only sees opaque topics + (for approve) ciphertext. Relay defaults to
+  public `ntfy.sh`; `pair --server` switches to self-hosted.
+- **Broadcast is cleartext ntfy fields** (title/message) so the stock ntfy phone
+  app renders it; confidentiality there rests on the unguessable topic + (ideally)
+  your own server. **Approve is end-to-end encrypted** (NaCl secretbox) — the
+  origin pre-seals both allow/deny responses into the ntfy action buttons, so the
+  phone needs no key and a decision is nonce-bound (no forge/replay).
+- **Remote approve is deny-only + allowlist.** Only allowlisted tools (default
+  Read/Glob/Grep/LS) are ever sent remote; off-allowlist → `ask` (normal local
+  prompt), never remote-approvable. Silence/unreachable → `deny`. The PreToolUse
+  hook is wired **only when `remote_approve` is on** (with a tool-name `matcher`),
+  and its `timeout` must exceed `approve_timeout_sec`.
+- **PreToolUse blocks Claude** while it waits for a tap (phone push latency is
+  often 10s+). It's a "stepping away" toggle, off by default — keep it that way.
+- **The hook must run the console exe**, even when the tray rewrites hooks: use
+  `hookExe()` (sibling `claude-toast.exe` on Windows), not `selfExe()`.
+- **ntfy subscribe takes no `since`** (stream new only); `since=now` is invalid and
+  silently breaks streaming receive.
