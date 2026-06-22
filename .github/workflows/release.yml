@@ -55,3 +55,44 @@ jobs:
           files: |
             ${{ matrix.asset }}.tar.gz
             ${{ matrix.asset }}.zip
+
+      # Also publish the bare Windows executables, for people who just want to
+      # download an .exe rather than unzip an archive.
+      - name: Attach raw Windows binaries
+        if: runner.os == 'Windows'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            claude-toast.exe
+            claude-toast-tray.exe
+
+  # After the binaries are published, bump the Scoop manifest + Homebrew formula
+  # so `scoop install` / `brew install` always resolve to this version. Commits
+  # back to main with the default token (same-repo push, no PAT needed).
+  manifests:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - name: Update Scoop + Homebrew manifests
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="${GITHUB_REF_NAME}"
+          ver="${tag#v}"
+          mkdir -p dist
+          gh release download "$tag" --dir dist --clobber
+          win=$(sha256sum dist/claude-toast-windows-amd64.zip | cut -d' ' -f1)
+          mac=$(sha256sum dist/claude-toast-darwin-arm64.tar.gz | cut -d' ' -f1)
+          lin=$(sha256sum dist/claude-toast-linux-amd64.tar.gz | cut -d' ' -f1)
+          python3 packaging/update.py "$ver" "$win" "$mac" "$lin"
+          rm -rf dist
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add packaging/
+          git diff --cached --quiet || git commit -m "packaging: update Scoop + Homebrew manifests for $tag"
+          git push origin main

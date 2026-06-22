@@ -34,6 +34,29 @@ Each toast shows, top to bottom:
 
 ## Install
 
+### Package managers
+
+One-command installs that pull from the latest [release](https://github.com/jacksonkr/claude-toast/releases):
+
+```sh
+# Windows (Scoop)
+scoop install https://raw.githubusercontent.com/jacksonkr/claude-toast/main/packaging/scoop/claude-toast.json
+
+# macOS / Linux (Homebrew)
+brew install https://raw.githubusercontent.com/jacksonkr/claude-toast/main/packaging/homebrew/claude-toast.rb
+```
+
+Then run the installer once to wire the hooks + tray autostart:
+
+```sh
+claude-toast install        # macOS / Linux
+claude-toast.exe install    # Windows
+```
+
+> Homebrew is the recommended path on macOS: it clears the download quarantine
+> flag, so you avoid the Gatekeeper warnings an unsigned `.app`/`.dmg` would
+> trigger. (macOS build is Apple Silicon; Intel users build from source.)
+
 ### From a release (recommended)
 
 Download the archive for your OS from the
@@ -51,6 +74,10 @@ somewhere permanent, then run the installer once:
 `install` wires the hooks into `~/.claude/settings.json`, registers the tray to
 start at login, and launches it immediately. Run `claude-toast test` to fire a
 sample notification.
+
+> **Windows:** if you'd rather not unzip, the release also has the bare
+> `claude-toast.exe` and `claude-toast-tray.exe` as direct downloads — drop both
+> in the same folder and run `claude-toast.exe install`.
 
 ### From source
 
