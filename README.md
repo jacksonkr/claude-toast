@@ -67,6 +67,10 @@ go build -o claude-toast . && ./claude-toast install
 .\build.ps1 ; .\claude-toast.exe install
 ```
 
+> **macOS** needs the Xcode Command Line Tools — the tray (`fyne.io/systray`) is
+> built with cgo. If `go build` complains about a missing compiler, run
+> `xcode-select --install` and retry. (A full Xcode install also satisfies this.)
+>
 > **Linux** needs GTK + AppIndicator dev headers for the tray:
 > `sudo apt-get install libgtk-3-dev libayatana-appindicator3-dev`
 
@@ -140,6 +144,40 @@ server (`https://ntfy.sh`), and subscribe to the topics printed by
 Phones are **viewers**: they receive toasts (and can tap Allow/Deny), but never
 run Claude.
 
+> **Naming:** each toast is suffixed with the sending device's name (`@laptop`).
+> On macOS this is taken from your **Computer Name** (System Settings → General →
+> About), falling back to the LocalHostName, then the system hostname; on
+> Windows/Linux it's the system hostname. The name is cached on first run — to
+> change it later, update the OS name and re-derive (see Troubleshooting).
+
+### Groups & the fingerprint
+
+A **group** is just the set of devices that share one **UID**. Everything else is
+derived from that UID locally, with no negotiation over the network:
+
+- The same UID deterministically yields the same encryption key **and** the same
+  ntfy topic names on every device — that's what puts them in one group.
+- `claude-toast status` prints a **group fp** — a short checksum (the first 6 hex
+  of SHA-256) of the UID. It's computed offline, so two devices showing the *same*
+  fp are guaranteed to share the *same* UID. Use it to confirm a link worked
+  without ever printing the secret itself.
+
+**Switching groups:**
+
+```sh
+# Join a different existing group (replaces this device's UID, fresh identity):
+claude-toast link <that-groups-uid>
+claude-toast pair --join <token>            # same, for a custom-relay token
+
+# Start a brand-new group (mints a fresh random UID nobody else has yet):
+claude-toast pair --server https://ntfy.sh --force
+claude-toast uid                            # read the new UID, link it elsewhere
+```
+
+After any switch, the topics change, so on each device: **restart the tray** (it
+keeps using the old topic until its connection drops — see Troubleshooting) and
+**re-subscribe the phone** to the new topics shown by `claude-toast status`.
+
 ### Remote approve / deny
 
 ```sh
@@ -153,13 +191,70 @@ linked devices; tap it and Claude continues. Safety model:
   `Read, Glob, Grep, LS`) are ever sent for remote approval. Anything else falls
   back to Claude's normal local prompt and can **never** be remote-approved.
 - **No answer ⇒ deny** — if nobody taps before the timeout, the tool is denied.
-- **End-to-end** — approval messages are encrypted and bound to a one-time nonce,
-  so the relay can't read or forge a decision, and a tap can't be replayed.
+- **Encrypted, nonce-bound decision** — the Allow/Deny *decision* is encrypted
+  (NaCl secretbox) and tied to a one-time nonce, so it can't be forged or replayed
+  onto a different request, and your phone needs no key to answer. Two honest
+  caveats: the human-readable *summary* (tool + path) is sent to the relay in
+  **cleartext by default** (set `approve_summary_cleartext: false` in `config.json`
+  to suppress it), and anyone who can read your request topic — including the
+  operator of the public `ntfy.sh` relay — could submit the pre-sealed Allow.
+  Impact is bounded (only read-only allowlisted tools are ever sent, and silence
+  still denies); for stronger guarantees, self-host the relay with
+  `pair --server`.
 
 > **Practical tip:** remote approve makes Claude **wait** for your tap (and deny
 > on silence) before every allowlisted tool — phone push latency alone is often
 > 10+ seconds. Treat it as a **"stepping away" switch**: `remote on` when you
 > leave, `remote off` (the default) when you're back at the keyboard.
+
+## Troubleshooting
+
+**Cross-device uses the relay, not your LAN.** Devices never talk to each other
+directly — they all dial out to ntfy. Being on the same network is neither
+required nor sufficient.
+
+**A linked device doesn't receive toasts.** First confirm it's in the group:
+`claude-toast status` should show `broadcast: on` and the **same** `group fp` and
+`broadcast topic` as the sender. If those match but toasts still don't arrive, the
+running **tray is on a stale subscription** — it only re-reads config when its
+connection drops, so a tray that was already running when you linked is still
+listening on the old topic. **Quit and relaunch the tray** (from its menu, or
+re-run `claude-toast install`).
+
+**Test the relay path directly.** Subscribe with `curl` and fire a toast from
+another device:
+
+```sh
+curl -s "https://ntfy.sh/<your-bc-topic>/json?poll=1&since=10m"
+```
+
+- A line appears → the relay reaches this machine; the problem is the tray (above)
+  or OS notification settings (below).
+- Nothing appears → the network is blocking the long-lived subscribe stream
+  (corporate proxy, firewall, or a proxy that buffers streaming HTTP). Allow the
+  tray's outbound HTTPS, or self-host ntfy with `pair --server`.
+
+**Phone gets toasts but a computer doesn't.** Expected difference: the ntfy phone
+app uses push delivery, while the desktop tray holds a raw streaming HTTP
+connection that some networks block. See the `curl` test above.
+
+**No banner appears at all (local `test` included).** Check OS notification
+permissions: macOS → System Settings → Notifications (allow the script runner);
+Windows → Settings → System → Notifications (allow "Claude Toast"). Turn off
+**Do Not Disturb / Focus** while testing.
+
+**Wrong / stale device name in the `@name` suffix.** The name is cached in
+`config.json` on first run. To refresh it, set the OS name you want, then clear the
+field and let it re-derive — `claude-toast status` rewrites it:
+
+```sh
+# macOS config: ~/Library/Application Support/claude-toast/config.json
+# delete the "device_name" value (set it to ""), then:
+claude-toast status
+```
+
+(Re-linking with `claude-toast link <uid>` also resets the local identity and
+re-derives the name.)
 
 ## Uninstall
 
