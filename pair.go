@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 )
 
@@ -130,12 +132,35 @@ func ensureIdentity(cfg *config) {
 		cfg.DeviceID = randHex(16)
 	}
 	if cfg.DeviceName == "" {
-		if h, err := os.Hostname(); err == nil && h != "" {
-			cfg.DeviceName = h
+		if name := computerName(); name != "" {
+			cfg.DeviceName = name
 		} else {
 			cfg.DeviceName = "device-" + originID(cfg.DeviceID)
 		}
 	}
+}
+
+// computerName is the friendly device name shown in broadcast toasts (the
+// "@name" suffix). On macOS os.Hostname() is usually a transient DHCP/.local
+// name (e.g. "Mac.lan"), so we prefer the user-set ComputerName (the "name your
+// Mac" field most people recognize), then LocalHostName, and only then fall back
+// to os.Hostname(). Elsewhere os.Hostname() is the right answer.
+func computerName() string {
+	if runtime.GOOS == "darwin" {
+		for _, key := range []string{"ComputerName", "LocalHostName"} {
+			out, err := exec.Command("scutil", "--get", key).Output()
+			if err != nil {
+				continue
+			}
+			if name := strings.TrimSpace(string(out)); name != "" {
+				return name
+			}
+		}
+	}
+	if h, err := os.Hostname(); err == nil && h != "" {
+		return h
+	}
+	return ""
 }
 
 func pairingToken(cfg config) string {

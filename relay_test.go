@@ -127,6 +127,28 @@ func TestJoinRejectsBadToken(t *testing.T) {
 	}
 }
 
+func TestEnsureIdentityFillsAndPreserves(t *testing.T) {
+	// An empty config gets a 32-hex device id and a non-empty display name
+	// (computerName falls back through hostname to a device-id label, so it is
+	// never empty on any OS).
+	var c config
+	ensureIdentity(&c)
+	if len(c.DeviceID) != 32 {
+		t.Errorf("DeviceID = %q, want 32 hex chars", c.DeviceID)
+	}
+	if c.DeviceName == "" {
+		t.Error("DeviceName not set")
+	}
+
+	// Re-deriving must not clobber an identity that is already set (this is what
+	// lets a customized name like "macfeet" survive a status/link round-trip).
+	c2 := config{DeviceID: "deadbeef", DeviceName: "macfeet"}
+	ensureIdentity(&c2)
+	if c2.DeviceID != "deadbeef" || c2.DeviceName != "macfeet" {
+		t.Errorf("ensureIdentity clobbered existing identity: %+v", c2)
+	}
+}
+
 func TestBroadcastEchoSuppression(t *testing.T) {
 	cfg := config{DeviceID: "0123456789abcdef0011", DeviceName: "me"}
 
