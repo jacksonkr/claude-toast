@@ -1,12 +1,12 @@
 {
-    "version": "0.2.0",
+    "version": "0.2.1",
     "description": "Desktop toast notifications for Claude Code, with cross-device broadcast + remote approve.",
     "homepage": "https://github.com/jacksonkr/claude-toast",
     "license": "MIT",
     "architecture": {
         "64bit": {
-            "url": "https://github.com/jacksonkr/claude-toast/releases/download/v0.2.0/claude-toast-windows-amd64.zip",
-            "hash": "223fc0d1f20a734be893e5f4b709eebe5e70cf2aa4642f3e1194eabf7bbe2b6f"
+            "url": "https://github.com/jacksonkr/claude-toast/releases/download/v0.2.1/claude-toast-windows-amd64.zip",
+            "hash": "e811b5e2b8525702566f08c3d7df4324ead7e7042054741a37a795c5775f72fe"
         }
     },
     "bin": [
