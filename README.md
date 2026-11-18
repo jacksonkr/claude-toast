@@ -32,6 +32,8 @@ Each toast shows, top to bottom:
 3. the **first few words of your last message** — so you know *which* session, even with several open
 4. **what Claude wants** — "Finished responding", "Claude needs your permission…"
 
+![Claude Toast notification on Windows 11](assets/toast-screenshot.png)
+
 ## Install
 
 ### Package managers
